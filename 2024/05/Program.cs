@@ -2,12 +2,13 @@
 using System.Text.RegularExpressions;
 
 var (rules, updates) = LoadData(args[0]);
-var correctUpdates = updates.Where(u => IsCorrect(rules, u));
-var result = correctUpdates.Sum(u => u.MiddleNumber);
+var incorrectUpdates = updates.Where(u => !IsCorrect(rules, u));
+var correctedUpdates = incorrectUpdates.Select(u => CorrectUpdate(rules, u));
+var result = correctedUpdates.Sum(u => u.MiddleNumber);
 Console.WriteLine("Result: {0}", result);
 
 
-static bool IsCorrect(List<(int,int)> rules, Update u)
+static bool IsCorrect(List<(int, int)> rules, Update u)
 {
     foreach (var (before, after) in rules)
     {
@@ -21,7 +22,35 @@ static bool IsCorrect(List<(int,int)> rules, Update u)
     return true;
 }
 
-static (List<(int,int)> rules, List<Update> updates) LoadData(string filename)
+static Update CorrectUpdate(List<(int, int)> rules, Update u)
+{
+    if (IsCorrect(rules, u))
+        return u;
+    bool changed = true;
+    while (changed)
+    {
+        changed = false;
+        foreach (var (before, after) in rules)
+        {
+            if (u.CollationOrder.TryGetValue(before, out int beforePos) &&
+                u.CollationOrder.TryGetValue(after, out int afterPos))
+            {
+                // If two are found to be in the wrong order, swap them.
+                if (beforePos >= afterPos)
+                {
+                    (u.PageNumbers[afterPos], u.PageNumbers[beforePos]) =
+                        (u.PageNumbers[beforePos], u.PageNumbers[afterPos]);
+                    u.CollationOrder[before] = afterPos;
+                    u.CollationOrder[after] = beforePos;
+                    changed = true;
+                }
+            }
+        }
+    }
+    return u;
+}
+
+static (List<(int, int)> rules, List<Update> updates) LoadData(string filename)
 {
     using StreamReader rdr = File.OpenText(filename);
     var rules = ReadRules(rdr);
@@ -29,11 +58,11 @@ static (List<(int,int)> rules, List<Update> updates) LoadData(string filename)
     return (rules, updates);
 }
 
-static List<(int,int)> ReadRules(StreamReader rdr)
+static List<(int, int)> ReadRules(StreamReader rdr)
 {
     var re = new Regex(@"(\d+)\|(\d+)");
-    var result = new List<(int,int)>();
-    for (;;)
+    var result = new List<(int, int)>();
+    for (; ; )
     {
         var line = rdr.ReadLine();
         if (line is null)
@@ -52,7 +81,7 @@ static List<(int,int)> ReadRules(StreamReader rdr)
 static List<Update> ReadUpdates(StreamReader rdr)
 {
     var result = new List<Update>();
-    for (;;)
+    for (; ; )
     {
         var line = rdr.ReadLine();
         if (line is null)
@@ -75,16 +104,18 @@ public class Update
             CollationOrder.Add(pageNo, CollationOrder.Count);
         }
         this.PageNumbers = pages.ToArray();
-            Debug.Assert(PageNumbers.Length > 0, "Expected positive number of pages.");
-            Debug.Assert((PageNumbers.Length & 1) == 1, "Expected odd number of pages");
+        Debug.Assert(PageNumbers.Length > 0, "Expected positive number of pages.");
+        Debug.Assert((PageNumbers.Length & 1) == 1, "Expected odd number of pages");
     }
 
-    public int[] PageNumbers {get;}
-    public Dictionary<int, int> CollationOrder {get;}
+    public int[] PageNumbers { get; }
+    public Dictionary<int, int> CollationOrder { get; }
 
-    public int MiddleNumber {
-        get {
-            return PageNumbers[PageNumbers.Length/2];
+    public int MiddleNumber
+    {
+        get
+        {
+            return PageNumbers[PageNumbers.Length / 2];
         }
     }
 }
