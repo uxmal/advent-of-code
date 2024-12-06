@@ -1,15 +1,34 @@
 ﻿using System.Diagnostics;
 
-var map = ReadLaboratoryMap(args[0]);
-    Console.Clear();
-    map.Render();
-while (Console.ReadKey(true).KeyChar != 'q') 
+if (args.Length < 1)
+    return;
+int iFile = 0;
+bool interactive = false;
+if (args[0] == "-i")
 {
-    if (!map.AdvanceGuard())
-        break;
+    interactive = true;
+    ++iFile;
+}
+var map = ReadLaboratoryMap(args[iFile]);
+if (interactive)
+{
     Console.Clear();
     map.Render();
+    while (Console.ReadKey(true).KeyChar != 'q')
+    {
+        Thread.Sleep(7);
+        if (!map.AdvanceGuard())
+            break;
+        Console.Clear();
+        map.Render();
+    }
 }
+else
+{
+    while (map.AdvanceGuard())
+        ;
+}
+Console.Write($"Visited positions: {map.Visited.Count}");
 
 
 static LaboratoryMap ReadLaboratoryMap(string filename)
@@ -86,7 +105,6 @@ class LaboratoryMap
     private readonly HashSet<Position> obstructions;
     private Position guardPos;
     private Direction guardDir;
-    private readonly HashSet<Position> visited;
 
     public LaboratoryMap(
         int arenaWidth,
@@ -100,8 +118,10 @@ class LaboratoryMap
         this.obstructions = obstructions;
         this.guardPos = guardPosition;
         this.guardDir = guardDirection;
-        this.visited = [ guardPos ];
+        this.Visited = [guardPos];
     }
+
+    public HashSet<Position> Visited { get; }
 
     public void Render()
     {
@@ -114,6 +134,8 @@ class LaboratoryMap
                     Console.Write(SelectGuardGlyph());
                 else if (obstructions.Contains(p))
                     Console.Write('#');
+                else if (Visited.Contains(p))
+                    Console.Write("X");
                 else
                     Console.Write('.');
             }
@@ -128,7 +150,10 @@ class LaboratoryMap
         if (!obstructions.Contains(nextPos))
         {
             guardPos = nextPos;
-            return IsGuardInBounds();
+            if (!IsGuardInBounds())
+                return false;
+            Visited.Add(nextPos);
+            return true;
         }
         this.guardDir = guardDir.RotateRight();
         return true;
