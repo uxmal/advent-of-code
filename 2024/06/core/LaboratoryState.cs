@@ -1,96 +1,16 @@
-﻿using System.Diagnostics;
+namespace Advent2024.Day06.Core;
 
-if (args.Length < 1)
-    return;
-int iFile = 0;
-bool interactive = false;
-if (args[0] == "-i")
+using System.Diagnostics;
+
+public readonly record struct Position(int X, int Y)
 {
-    interactive = true;
-    ++iFile;
-}
-var state = ReadLaboratoryMap(args[iFile]);
-if (interactive)
-{
-    Console.Clear();
-    state.Render();
-    while (Console.ReadKey(true).KeyChar != 'q')
-    {
-        Thread.Sleep(7);
-        if (state.AdvanceGuard() != GuardState.Moving)
-            break;
-        Console.Clear();
-        state.Render();
-    }
-}
-else
-{
-    while (state.AdvanceGuard() == GuardState.Moving)
-        ;
-}
-Console.Write($"Visited positions: {state.Visited.Count}");
-
-
-static LaboratoryState ReadLaboratoryMap(string filename)
-{
-    using StreamReader rdr = File.OpenText(filename);
-    int y = 0;
-    string? previousLine = null;
-    Direction? dir = null;
-    Position? pos = null;
-    HashSet<Position> obstructions = [];
-    int width = 0;
-    for (; ; )
-    {
-        string? line = rdr.ReadLine();
-        if (line is null)
-            break;
-        if (previousLine is not null && line.Length != previousLine.Length)
-            throw new ApplicationException("Row length don't match.");
-        previousLine = line;
-        width = line.Length;
-        for (int x = 0; x < line.Length; ++x)
-        {
-            switch (line[x])
-            {
-                case '^':
-                    pos = new Position(x, y); dir = new Direction(0, -1); break;
-                case '>':
-                    pos = new Position(x, y); dir = new Direction(1, 0); break;
-                case 'v':
-                    pos = new Position(x, y); dir = new Direction(0, 1); break;
-                case '<':
-                    pos = new Position(x, y); dir = new Direction(-1, 0); break;
-                case '#':
-                    obstructions.Add(new Position(x, y)); break;
-                case '.':
-                    break;
-                default:
-                    throw new InvalidDataException($"Unexpected character '{line[x]}' in map.");
-            }
-        }
-        ++y;
-    }
-    if (dir is null || pos is null)
-        throw new InvalidDataException("The player position wasn't found.");
-    if (width == 0 || y == 0)
-        throw new InvalidDataException("The size of the arena couldn't be determined.");
-
-var map = new LaboratoryMap(width, y, obstructions);
-var state = new LaboratoryState(map, pos.Value, dir.Value);
-return state;
-}
-
-
-record struct Position(int X, int Y)
-{
-    public Position Move(in Direction dir)
+    public readonly Position Move(in Direction dir)
     {
         return new Position(this.X + dir.Dx, this.Y + dir.Dy);
     }
 }
 
-record struct Direction(int Dx, int Dy)
+public readonly record struct Direction(int Dx, int Dy)
 {
     public Direction RotateRight()
     {
@@ -100,7 +20,7 @@ record struct Direction(int Dx, int Dy)
     }
 }
 
-class LaboratoryState
+public class LaboratoryState
 {
     private LaboratoryMap map;
 
@@ -131,7 +51,7 @@ class LaboratoryState
     public GuardState AdvanceGuard()
     {
         var nextPos = GuardPosition.Move(GuardDirection);
-        if (!map.IsObstructed(nextPos))
+        if (!map.IsObstructed(nextPos) && nextPos != ExtraObstruction)
         {
             GuardPosition = nextPos;
             if (!map.IsInBounds(GuardPosition))
@@ -148,34 +68,35 @@ class LaboratoryState
         return GuardState.Moving;
     }
 
-    public void Render()
+    public void Render(IRenderDevice device)
     {
+        device.BeginFrame();
         for (int y = 0; y < map.ArenaHeight; ++y)
         {
             for (int x = 0; x < map.ArenaWidth; ++x)
             {
                 var p = new Position(x, y);
                 if (this.GuardPosition == p)
-                    Console.Write(SelectGuardGlyph());
+                    device.WriteGlyph(SelectGuardGlyph());
                 else if (p == ExtraObstruction)
-                    Console.Write("O");
+                    device.WriteGlyph('O');
                 else if (map.IsObstructed(p))
-                    Console.Write('#');
+                    device.WriteGlyph('#');
                 else if (Visited.ContainsKey(p))
-                    Console.Write("X");
+                    device.WriteGlyph('X');
                 else
-                    Console.Write('.');
+                    device.WriteGlyph('.');
             }
-            Console.WriteLine();
+            device.WriteLine();
         }
-        Console.WriteLine($"Dir: ({GuardDirection.Dx},{GuardDirection.Dy})");
+        device.WriteStatusLine($"Dir: ({GuardDirection.Dx},{GuardDirection.Dy})");
     }
 
 
     private char SelectGuardGlyph()
     {
         var d = this.GuardDirection;
-        Debug.Assert(Math.Abs(d.Dx) + Math.Abs(d.Dy) == 1);
+        System.Diagnostics.Debug.Assert(Math.Abs(d.Dx) + Math.Abs(d.Dy) == 1);
         if (d.Dx == 0)
         {
             if (d.Dy == 1)
@@ -193,8 +114,74 @@ class LaboratoryState
         }
     }
 
+    public bool IsObstructed(Position position)
+    {
+        return map.IsObstructed(position);
+    }
+
+    public bool PlaceObstruction(Position position)
+    {
+        if (map.IsObstructed(position) || !map.IsInBounds(position))
+            return false;
+        this.ExtraObstruction = position;
+        return true;
+    }
+
+
+    public static LaboratoryState ReadLaboratoryMap(string filename)
+{
+    using StreamReader rdr = File.OpenText(filename);
+    int y = 0;
+    string? previousLine = null;
+    Direction? dir = null;
+    Position? pos = null;
+    HashSet<Position> obstructions = [];
+    int width = 0;
+    for (; ; )
+    {
+        string? line = rdr.ReadLine();
+        if (line is null)
+            break;
+        if (previousLine is not null && line.Length != previousLine.Length)
+            throw new ApplicationException("Row length don't match.");
+        previousLine = line;
+        width = line.Length;
+        for (int x = 0; x < line.Length; ++x)
+        {
+            switch (line[x])
+            {
+            case '^':
+                pos = new Position(x, y); dir = new Direction(0, -1); break;
+            case '>':
+                pos = new Position(x, y); dir = new Direction(1, 0); break;
+            case 'v':
+                pos = new Position(x, y); dir = new Direction(0, 1); break;
+            case '<':
+                pos = new Position(x, y); dir = new Direction(-1, 0); break;
+            case '#':
+                obstructions.Add(new Position(x, y)); break;
+            case '.':
+                break;
+            default:
+                throw new InvalidDataException($"Unexpected character '{line[x]}' in map.");
+            }
+        }
+        ++y;
+    }
+    if (dir is null || pos is null)
+        throw new InvalidDataException("The player position wasn't found.");
+    if (width == 0 || y == 0)
+        throw new InvalidDataException("The size of the arena couldn't be determined.");
+
+    var map = new LaboratoryMap(width, y, obstructions);
+    var state = new LaboratoryState(map, pos.Value, dir.Value);
+    return state;
 }
-class LaboratoryMap
+
+}
+
+
+public class LaboratoryMap
 {
     private readonly HashSet<Position> obstructions;
 

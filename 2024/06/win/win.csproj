@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Advent2024.Day06.Win</RootNamespace>
+    <AssemblyName>Advent2024.Day06.Win</AssemblyName>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../core/core.csproj" />
+	</ItemGroup>
+
+</Project>

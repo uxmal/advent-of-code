@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Advent2024.Day06.Core</AssemblyName>
+    <RootNamespace>Advent2024.Day06.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>
