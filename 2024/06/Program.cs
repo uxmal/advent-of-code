@@ -9,29 +9,29 @@ if (args[0] == "-i")
     interactive = true;
     ++iFile;
 }
-var map = ReadLaboratoryMap(args[iFile]);
+var state = ReadLaboratoryMap(args[iFile]);
 if (interactive)
 {
     Console.Clear();
-    map.Render();
+    state.Render();
     while (Console.ReadKey(true).KeyChar != 'q')
     {
         Thread.Sleep(7);
-        if (!map.AdvanceGuard())
+        if (state.AdvanceGuard() != GuardState.Moving)
             break;
         Console.Clear();
-        map.Render();
+        state.Render();
     }
 }
 else
 {
-    while (map.AdvanceGuard())
+    while (state.AdvanceGuard() == GuardState.Moving)
         ;
 }
-Console.Write($"Visited positions: {map.Visited.Count}");
+Console.Write($"Visited positions: {state.Visited.Count}");
 
 
-static LaboratoryMap ReadLaboratoryMap(string filename)
+static LaboratoryState ReadLaboratoryMap(string filename)
 {
     using StreamReader rdr = File.OpenText(filename);
     int y = 0;
@@ -76,7 +76,9 @@ static LaboratoryMap ReadLaboratoryMap(string filename)
     if (width == 0 || y == 0)
         throw new InvalidDataException("The size of the arena couldn't be determined.");
 
-    return new LaboratoryMap(width, y, obstructions, pos.Value, dir.Value);
+var map = new LaboratoryMap(width, y, obstructions);
+var state = new LaboratoryState(map, pos.Value, dir.Value);
+return state;
 }
 
 
@@ -98,77 +100,81 @@ record struct Direction(int Dx, int Dy)
     }
 }
 
-class LaboratoryMap
+class LaboratoryState
 {
-    private readonly int arenaWidth;
-    private readonly int arenaHeight;
-    private readonly HashSet<Position> obstructions;
-    private Position guardPos;
-    private Direction guardDir;
+    private LaboratoryMap map;
 
-    public LaboratoryMap(
-        int arenaWidth,
-        int arenaHeight,
-        HashSet<Position> obstructions,
-        Position guardPosition,
-        Direction guardDirection)
+    public LaboratoryState(LaboratoryMap map, Position guardPosition, Direction guardDirection)
     {
-        this.arenaHeight = arenaHeight;
-        this.arenaWidth = arenaWidth;
-        this.obstructions = obstructions;
-        this.guardPos = guardPosition;
-        this.guardDir = guardDirection;
-        this.Visited = [guardPos];
+        this.map = map;
+        this.GuardPosition = guardPosition;
+        this.GuardDirection = guardDirection;
+        this.ExtraObstruction = new Position(-1, -1);
+        this.Visited = new() { { GuardPosition, guardDirection } };
     }
 
-    public HashSet<Position> Visited { get; }
+    public LaboratoryState(LaboratoryState that)
+    {
+        this.map = that.map;
+        this.GuardPosition = that.GuardPosition;
+        this.GuardDirection = that.GuardDirection;
+        this.ExtraObstruction = that.ExtraObstruction;
+        this.Visited = new Dictionary<Position, Direction>(that.Visited);
+    }
+
+
+    public Dictionary<Position, Direction> Visited { get; }
+    public Position ExtraObstruction { get; set; }
+    public Position GuardPosition { get; private set; }
+    public Direction GuardDirection { get; private set; }
+
+    public GuardState AdvanceGuard()
+    {
+        var nextPos = GuardPosition.Move(GuardDirection);
+        if (!map.IsObstructed(nextPos))
+        {
+            GuardPosition = nextPos;
+            if (!map.IsInBounds(GuardPosition))
+                return GuardState.LeftLaboratory;
+            if (Visited.TryGetValue(GuardPosition, out var oldDir))
+            {
+                if (oldDir == GuardDirection)
+                    return GuardState.StuckInLoop;
+            }
+            Visited[nextPos] = GuardDirection;
+            return GuardState.Moving;
+        }
+        this.GuardDirection = GuardDirection.RotateRight();
+        return GuardState.Moving;
+    }
 
     public void Render()
     {
-        for (int y = 0; y < arenaHeight; ++y)
+        for (int y = 0; y < map.ArenaHeight; ++y)
         {
-            for (int x = 0; x < arenaWidth; ++x)
+            for (int x = 0; x < map.ArenaWidth; ++x)
             {
                 var p = new Position(x, y);
-                if (this.guardPos == p)
+                if (this.GuardPosition == p)
                     Console.Write(SelectGuardGlyph());
-                else if (obstructions.Contains(p))
+                else if (p == ExtraObstruction)
+                    Console.Write("O");
+                else if (map.IsObstructed(p))
                     Console.Write('#');
-                else if (Visited.Contains(p))
+                else if (Visited.ContainsKey(p))
                     Console.Write("X");
                 else
                     Console.Write('.');
             }
             Console.WriteLine();
         }
-        Console.WriteLine($"Dir: ({guardDir.Dx},{guardDir.Dy})");
+        Console.WriteLine($"Dir: ({GuardDirection.Dx},{GuardDirection.Dy})");
     }
 
-    public bool AdvanceGuard()
-    {
-        var nextPos = guardPos.Move(guardDir);
-        if (!obstructions.Contains(nextPos))
-        {
-            guardPos = nextPos;
-            if (!IsGuardInBounds())
-                return false;
-            Visited.Add(nextPos);
-            return true;
-        }
-        this.guardDir = guardDir.RotateRight();
-        return true;
-    }
-
-    private bool IsGuardInBounds()
-    {
-        return
-            (0 <= guardPos.X && guardPos.X < arenaWidth) &&
-            (0 <= guardPos.Y && guardPos.Y < arenaHeight);
-    }
 
     private char SelectGuardGlyph()
     {
-        var d = this.guardDir;
+        var d = this.GuardDirection;
         Debug.Assert(Math.Abs(d.Dx) + Math.Abs(d.Dy) == 1);
         if (d.Dx == 0)
         {
@@ -186,4 +192,48 @@ class LaboratoryMap
             return '<';
         }
     }
+
+}
+class LaboratoryMap
+{
+    private readonly HashSet<Position> obstructions;
+
+    public LaboratoryMap(
+        int arenaWidth,
+        int arenaHeight,
+        HashSet<Position> obstructions)
+    {
+        this.ArenaHeight = arenaHeight;
+        this.ArenaWidth = arenaWidth;
+        this.obstructions = obstructions;
+    }
+
+    public int ArenaWidth { get; }
+
+    public int ArenaHeight { get; }
+
+    public bool IsInBounds(Position pos)
+    {
+        return
+            (0 <= pos.X && pos.X < ArenaWidth) &&
+            (0 <= pos.Y && pos.Y < ArenaHeight);
+    }
+
+
+    public bool IsObstructed(Position p)
+    {
+        return obstructions.Contains(p);
+    }
+
+
+
+
+
+}
+
+public enum GuardState
+{
+    Moving,
+    LeftLaboratory,
+    StuckInLoop
 }
