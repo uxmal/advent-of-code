@@ -30,7 +30,7 @@ public class LaboratoryState
         this.GuardPosition = guardPosition;
         this.GuardDirection = guardDirection;
         this.ExtraObstruction = new Position(-1, -1);
-        this.Visited = new() { { GuardPosition, guardDirection } };
+        this.Visited = new() { ( GuardPosition, guardDirection ) };
     }
 
     public LaboratoryState(LaboratoryState that)
@@ -39,11 +39,11 @@ public class LaboratoryState
         this.GuardPosition = that.GuardPosition;
         this.GuardDirection = that.GuardDirection;
         this.ExtraObstruction = that.ExtraObstruction;
-        this.Visited = new Dictionary<Position, Direction>(that.Visited);
+        this.Visited = new HashSet<(Position, Direction)>(that.Visited);
     }
 
 
-    public Dictionary<Position, Direction> Visited { get; }
+    public HashSet<(Position, Direction)> Visited { get; }
     public Position ExtraObstruction { get; set; }
     public Position GuardPosition { get; private set; }
     public Direction GuardDirection { get; private set; }
@@ -56,12 +56,10 @@ public class LaboratoryState
             GuardPosition = nextPos;
             if (!map.IsInBounds(GuardPosition))
                 return GuardState.LeftLaboratory;
-            if (Visited.TryGetValue(GuardPosition, out var oldDir))
+            if (!Visited.Add((GuardPosition, GuardDirection)))
             {
-                if (oldDir == GuardDirection)
-                    return GuardState.StuckInLoop;
+                return GuardState.StuckInLoop;
             }
-            Visited[nextPos] = GuardDirection;
             return GuardState.Moving;
         }
         this.GuardDirection = GuardDirection.RotateRight();
@@ -82,8 +80,8 @@ public class LaboratoryState
                     device.WriteGlyph('O');
                 else if (map.IsObstructed(p))
                     device.WriteGlyph('#');
-                else if (Visited.ContainsKey(p))
-                    device.WriteGlyph('X');
+                //else if (Visited.ContainsKey(p))
+                //    device.WriteGlyph('X');
                 else
                     device.WriteGlyph('.');
             }

@@ -7,26 +7,16 @@ if (args.Length < 1)
 var vm = ArgsParser.EatArgs(args);
 
 var console = new ConsoleRenderDevice();
-if (!vm.ExtraObstacle)
-{
-    CountVisited(vm.Interactive, vm.State!, console);
-}
-else
-{
-    CountLoopingExtraObstacles(vm.Interactive, vm.State!, console);
-}
+var visited = CountVisited(vm.Interactive, new(vm.State!), console);
+CountLoopingExtraObstacles(visited, vm.Interactive, vm.State!, console);
 
-
-static void CountLoopingExtraObstacles(bool interactive, LaboratoryState startState, IRenderDevice device)
+static void CountLoopingExtraObstacles(HashSet<Position> path, bool interactive, LaboratoryState startState, IRenderDevice device)
 {
     HashSet<Position> loopingPositions = [];
-    var slowMover = startState;
-    for (; ; )
+    foreach (var pos in path.Where(p => p != startState.GuardPosition))
     {
-        var state = TryPlaceObstruction(slowMover);
-        if (state is null)
-            break;
-        var pos = state.ExtraObstruction;
+        var state = new LaboratoryState(startState);
+        state.ExtraObstruction = pos;
         var result = MoveGuard(state, device);
         if (result == GuardState.StuckInLoop)
         {
@@ -40,26 +30,8 @@ static void CountLoopingExtraObstacles(bool interactive, LaboratoryState startSt
                     break;
             }
         }
-        if (slowMover.AdvanceGuard() == GuardState.LeftLaboratory)
-            break;
     }
     device.WriteStatusLine($"Looping positions: {loopingPositions.Count}");
-}
-
-static LaboratoryState? TryPlaceObstruction(LaboratoryState state)
-{
-    var probeState = new LaboratoryState(state);
-    for (; ; )
-    {
-        var obstrPosition = probeState.GuardPosition.Move(probeState.GuardDirection);
-        if (!probeState.IsObstructed(obstrPosition))
-        {
-            probeState.PlaceObstruction(obstrPosition);
-            return probeState;
-        }
-        if (probeState.AdvanceGuard() != GuardState.Moving)
-            return null;
-    }
 }
 
 static GuardState MoveGuard(LaboratoryState state, IRenderDevice device)
@@ -67,16 +39,12 @@ static GuardState MoveGuard(LaboratoryState state, IRenderDevice device)
     for (; ; )
     {
         var guardState = state.AdvanceGuard();
-        device.Clear();
-        state.Render(device);
-        if (device.ReadKey() == 'q')
-            return GuardState.LeftLaboratory;
         if (guardState != GuardState.Moving)
             return guardState;
     }
 }
 
-static void CountVisited(bool interactive, LaboratoryState state, IRenderDevice device)
+static HashSet<Position> CountVisited(bool interactive, LaboratoryState state, IRenderDevice device)
 {
     if (interactive)
     {
@@ -96,7 +64,9 @@ static void CountVisited(bool interactive, LaboratoryState state, IRenderDevice 
         while (state.AdvanceGuard() == GuardState.Moving)
             ;
     }
-    device.WriteStatusLine($"Visited positions: {state.Visited.Count}");
+    var places = state.Visited.Select(x => x.Item1).ToHashSet();
+    device.WriteStatusLine($"Visited positions: {places.Count}");
+    return places;
 }
 
 
