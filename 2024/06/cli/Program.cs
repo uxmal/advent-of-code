@@ -12,6 +12,7 @@ CountLoopingExtraObstacles(visited, vm.Interactive, vm.State!, console);
 
 static void CountLoopingExtraObstacles(HashSet<Position> path, bool interactive, LaboratoryState startState, IRenderDevice device)
 {
+    var sw = Stopwatch.StartNew();
     HashSet<Position> loopingPositions = [];
     foreach (var pos in path.Where(p => p != startState.GuardPosition))
     {
@@ -31,7 +32,7 @@ static void CountLoopingExtraObstacles(HashSet<Position> path, bool interactive,
             }
         }
     }
-    device.WriteStatusLine($"Looping positions: {loopingPositions.Count}");
+    device.WriteStatusLine($"Looping positions: {loopingPositions.Count} in {sw.ElapsedMilliseconds}ms");
 }
 
 static GuardState MoveGuard(LaboratoryState state, IRenderDevice device)
