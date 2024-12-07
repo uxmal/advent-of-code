@@ -1,4 +1,6 @@
-﻿args = args.Length == 0
+﻿using System.Diagnostics;
+
+args = args.Length == 0
     ? [@"C:\dev\uxmal\advent\2024\07\input"]
     : args;
 var equations = LoadEquations(args[0]);
@@ -36,7 +38,20 @@ static class EqEvaluator
     {
         (a, b) => a + b,
         (a, b) => a * b,
+        Concat,
     };
+
+    static long Concat(long a, long b)
+    {
+        Debug.Assert(b != 0);
+        long t = b;
+        while (t != 0)
+        {
+            a *= 10;
+            t /= 10;
+        }
+        return a + b;
+    }
 
     static bool CouldBeTrueRecursive(Equation e, int index, long totalSoFar)
     {
