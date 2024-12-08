@@ -4,6 +4,7 @@ using Advent2024.Day08;
 var state = ReadInput(args[0]);
 var sw = Stopwatch.StartNew();
 PlaceAntinodes(state);
+state.Render();
 Console.WriteLine($"Unique antinodes {state.Antinodes.Count} (in {sw.ElapsedMilliseconds}ms)");
 
 static void PlaceAntinodes(ProblemState state)
@@ -15,17 +16,19 @@ static void PlaceAntinodes(ProblemState state)
             for (int j = i+1; j < positions.Count; ++j)
             {
                 var vec = positions[j] - positions[i];
-                var antinode1 = positions[j] + vec;
-                var antinode2 = positions[i] - vec;
-                if (state.Arena.IsInBounds(antinode1))
+                var antinode1 = positions[j];
+                while (state.Arena.IsInBounds(antinode1))
                 {
                     state.Antinodes.Add(antinode1);
+                    antinode1 += vec;
                     // state.Render();
                     // Console.ReadKey(true);
                 }
-                if (state.Arena.IsInBounds(antinode2))
+                var antinode2 = positions[i];
+                while (state.Arena.IsInBounds(antinode2))
                 {
                     state.Antinodes.Add(antinode2);
+                    antinode2 -= vec;
                     // state.Render();
                     // Console.ReadKey(true);
                 }
