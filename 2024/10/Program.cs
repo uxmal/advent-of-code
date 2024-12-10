@@ -2,10 +2,9 @@
 
 var arena = LoadArena(args[0]);
 
-var (peaks, graph) = FindAllEdges(arena);
+var graph = FindAllEdges(arena);
 Dictionary<Position, int> trailheadScores = [];
-ScoreTrails(graph, arena, peaks);
-var sumScores = trailheadScores.Values.Sum();
+int sumScores = ScoreTrails(graph, arena);
 Console.WriteLine($"Sum of scores: {sumScores}");
 
 static Arena LoadArena(string filename)
@@ -13,14 +12,46 @@ static Arena LoadArena(string filename)
     return new Arena(File.ReadAllLines(filename));
 }
 
-void ScoreTrails(Graph graph, Arena arena, HashSet<Position> peaks)
+int ScoreTrails(Graph graph, Arena arena)
 {
-    foreach (var peak in peaks)
+#if PART1
+    foreach (var peak in graph.Sinks)
     {
         HashSet<Position> visited = [];
         ScoreTrailsDown(peak, graph, arena, visited);
         RenderAndWait(arena, visited);
+
     }
+    return trailheadScores.Values.Sum();
+
+#else
+    int totalScore = 0;
+    foreach (var head in graph.Sources)
+    {
+        HashSet<Position> visited = [];
+        int score = CountPaths(head, graph, arena, visited);
+        totalScore += score;
+        RenderAndWaitRating(arena, visited, score);
+    }
+    return totalScore;
+#endif
+}
+
+static int CountPaths(Position pos, Graph graph, Arena arena, HashSet<Position> visited)
+{
+    if (arena[pos.X, pos.Y] == 9)
+    {
+        return 1;
+    }
+    if (!visited.Add(pos))
+        return 0;
+    int cPaths = 0;
+    foreach (var next in graph.Succ(pos))
+    {
+        cPaths += CountPaths(next, graph, arena, visited);
+    }
+    visited.Remove(pos);
+    return cPaths;
 }
 
 void ScoreTrailsDown(Position pos, Graph graph, Arena arena, HashSet<Position> visited)
@@ -42,7 +73,6 @@ void ScoreTrailsDown(Position pos, Graph graph, Arena arena, HashSet<Position> v
 
 static void RenderAndWait(Arena arena, HashSet<Position> visited)
 {
-    return;
     Console.Clear();
     for (int y = 0; y < arena.Height; ++y)
     {
@@ -59,10 +89,31 @@ static void RenderAndWait(Arena arena, HashSet<Position> visited)
     Console.ReadKey(true);
 }
 
-static (HashSet<Position>, Graph) FindAllEdges(Arena arena)
+static void RenderAndWaitRating(Arena arena, HashSet<Position> visited, int score)
 {
-    var peaks = new HashSet<Position>();
+    return;
+    // Console.Clear();
+    for (int y = 0; y < arena.Height; ++y)
+    {
+        for (int x = 0; x < arena.Width; ++x)
+        {
+            var pos = new Position(x, y);
+            char ch = '.';
+            if (visited.Contains(pos))
+                ch = (char)(arena[x, y] + '0');
+            Console.Write(ch);
+        }
+        Console.WriteLine();
+    }
+    Console.ReadLine();
+    // Console.ReadKey(true);
+}
+
+static Graph FindAllEdges(Arena arena)
+{
     var graph = new Graph();
+    var heads = graph.Sources;
+    var peaks = graph.Sinks;
     Position from;
 
     void Probe(int dx, int dy)
@@ -72,9 +123,8 @@ static (HashSet<Position>, Graph) FindAllEdges(Arena arena)
             return;
         var elevFrom = arena[from.X, from.Y];
         var elevTo = arena[to.X, to.Y];
-        if (elevFrom - elevTo != 1)
-            return;
-        graph.AddEdge(from, to);
+        if (elevTo - elevFrom == 1)
+            graph.AddEdge(from, to);
     }
 
     for (int y = 0; y < arena.Height; ++y)
@@ -84,11 +134,13 @@ static (HashSet<Position>, Graph) FindAllEdges(Arena arena)
             from = new Position(x, y);
             if (arena[x, y] == 9)
                 peaks.Add(from);
+            if (arena[x, y] == 0)
+                heads.Add(from);
             Probe(1, 0);
             Probe(0, 1);
             Probe(0, -1);
             Probe(-1, 0);
         }
     }
-    return (peaks, graph);
+    return graph;
 }

@@ -1,12 +1,15 @@
-
-
-using System.Security.Cryptography.X509Certificates;
-
 public class Graph
 {
     private readonly Dictionary<Position, List<Position>> successors = [];
     private readonly Dictionary<Position, List<Position>> predecessors = [];
 
+    public Graph()
+    {
+    }
+
+    public HashSet<Position> Sources {get;} = [];
+    public HashSet<Position> Sinks {get;} = [];
+    
     public void AddEdge(Position from, Position to)
     {
         if (!successors.TryGetValue(from, out var succs))
