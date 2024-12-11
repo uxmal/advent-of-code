@@ -1,24 +1,15 @@
+using System.Numerics;
+
 public class ProblemState
 {
     private int cBlinks;
-    private Dictionary<long, Memo> memos;
+    private Counter<long> tallies;
 
     public ProblemState(long[] values)
     {
-        this.memos = [];
-        this.Values = values.Select(v => Memoize(v)).ToList();
+        this.tallies = new(values);
     }
 
-    public List<Memo> Values { get; private set; }
-
-    private Memo Memoize(long v)
-    {
-        if (memos.TryGetValue(v, out var memo))
-            return memo;
-        memo = new Memo(v);
-        memos.Add(v, memo);
-        return memo;
-    }
 
     private int CountDecimalDigits(long n)
     {
@@ -27,47 +18,50 @@ public class ProblemState
 
     public void Blink()
     {
-        List<Memo> newValues = [];
-        foreach (var stone in Values)
+        Counter<long> newTallies = new();
+        foreach (var (stone, count) in tallies.GetTallies())
         {
-            if (stone.Value == 0)
+            if (stone == 0)
             {
-                newValues.Add(Memoize(1));
+                newTallies.Add(1, count);
                 continue;
             }
-            int digits = CountDecimalDigits(stone.Value);
+            int digits = CountDecimalDigits(stone);
             if (digits % 2 == 0)
             {
                 int halfDigits = digits / 2;
                 long scale = (long)Math.Pow(10, halfDigits);
-                long stone1 = stone.Value / scale;
-                long stone2 = stone.Value % scale;
-                newValues.Add(Memoize(stone1));
-                newValues.Add(Memoize(stone2));
+                long stone1 = stone / scale;
+                long stone2 = stone % scale;
+                newTallies.Add(stone1, count);
+                newTallies.Add(stone2, count);
             }
             else
             {
-                newValues.Add(Memoize(stone.Value * 2024));
+                newTallies.Add(stone * 2024, count);
             }
         }
-        this.Values = newValues;
+        this.tallies = newTallies;
         ++cBlinks;
     }
 
     public void Render()
     {
-        Console.Write($"{cBlinks,2} blink(s), {Values.Count}: [");
-        var n = Math.Min(100, Values.Count);
-        for (int i = 0; i < n; ++i)
-        {
-            Console.Write($" {Values[i]}");
-        }
-        Console.WriteLine(" ]");
+        // foreach (var (k, v) in tallies.GetTallies().OrderBy(c => c.Key))
+        // {
+        //     Console.WriteLine("   {0,18} {1,10}", k, v);
+        // }
+        Console.WriteLine($"{cBlinks,2} blink(s), {CountItems()}");
     }
 
-    public int CountItems()
+    public BigInteger CountItems()
     {
-        return Values.Count;
+        BigInteger sum = 0;
+        foreach (var item in tallies.GetTallies())
+        {
+            sum += item.Value;
+        }
+        return sum;
     }
 }
 
