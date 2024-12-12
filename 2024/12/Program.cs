@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Net;
 
 var arena = ReadArena(args[0]);
 var regionDict = CreateEmptyDict(arena);
@@ -11,13 +10,18 @@ CountCorners(arena, regionDict);
 
 foreach (var region in distinctRegions.OrderBy(r => r.ch))
 {
-    Console.WriteLine($"{region.ch}: a {region.area,4}; p {region.perimeter,4}; c {region.corners}");
+//    Console.WriteLine($"{region.ch}: a {region.area,4}; p {region.perimeter,4}; c {region.corners}");
 }
 
+var sw = Stopwatch.StartNew();
 var totalPerimeterPrice = distinctRegions.Sum(r => r.PerimeterPrice);
+var msPart1 = sw.Elapsed.Microseconds;
+sw.Restart();
 var totalSidePrice = distinctRegions.Sum(r => r.SidePrice);
+var msPart2= sw.Elapsed.Microseconds;
 Console.WriteLine("Total perimeter price: {0}", totalPerimeterPrice);
 Console.WriteLine("Total side price: {0}", totalSidePrice);
+Console.WriteLine("Part 1: {0} usec, Part 2: {1} usec", msPart1, msPart2);
 
 static Arena ReadArena(string filename)
 {
@@ -65,7 +69,6 @@ static int IsCorner(Dictionary<Position, Region> regions, Region c,  int x, int 
     if (cx != c && cy != c)
         return 1;
     return (cx == c && cy == c && cxy != c) ? 1 : 0;
-
 }
 
 static void CountCorners(Arena arena, Dictionary<Position, Region> regions)
