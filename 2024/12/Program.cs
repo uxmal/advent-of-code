@@ -2,18 +2,22 @@
 using System.Net;
 
 var arena = ReadArena(args[0]);
-var empty = CreateEmptyDict(arena);
-var regions = FindRegions(arena, empty);
+var regionDict = CreateEmptyDict(arena);
+var regions = FindRegions(arena, regionDict);
 var distinctRegions = regions.GroupBy(r => r.Representative)
     .Select(e => e.Key)
     .ToList();
+CountCorners(arena, regionDict);
+
 foreach (var region in distinctRegions.OrderBy(r => r.ch))
 {
-  //  Console.WriteLine($"{region.ch}: area {region.area,8} perimeter {region.perimeter,8}");
+    Console.WriteLine($"{region.ch}: a {region.area,4}; p {region.perimeter,4}; c {region.corners}");
 }
 
-var totalPrice = distinctRegions.Sum(r => r.Price);
-Console.WriteLine("Total price: {0}", totalPrice);
+var totalPerimeterPrice = distinctRegions.Sum(r => r.PerimeterPrice);
+var totalSidePrice = distinctRegions.Sum(r => r.SidePrice);
+Console.WriteLine("Total perimeter price: {0}", totalPerimeterPrice);
+Console.WriteLine("Total side price: {0}", totalSidePrice);
 
 static Arena ReadArena(string filename)
 {
@@ -53,6 +57,34 @@ static HashSet<Region> FindRegions(Arena arena, Dictionary<Position, Region> reg
     return result;
 }
 
+static int IsCorner(Dictionary<Position, Region> regions, Region c,  int x, int y, int dx, int dy)
+{
+    var cx = regions[new(x+dx,y)].FindRep();
+    var cy = regions[new(x,y+dy)].FindRep();
+    var cxy = regions[new(x+dx,y+dy)].FindRep();
+    if (cx != c && cy != c)
+        return 1;
+    return (cx == c && cy == c && cxy != c) ? 1 : 0;
+
+}
+
+static void CountCorners(Arena arena, Dictionary<Position, Region> regions)
+{
+    for (int y = 0; y < arena.Height; ++y)
+    {
+        for (int x = 0; x < arena.Width; ++x)
+        {
+            char ch = arena[x,y];
+            var region = regions[new(x,y)].FindRep();
+            var ul = IsCorner(regions, region, x, y, -1, -1);
+            var ur = IsCorner(regions, region, x, y, 1, -1);
+            var ll = IsCorner(regions, region, x, y, -1, 1);
+            var lr = IsCorner(regions, region, x, y, 1, 1);
+            region.corners += ul + ur + ll + lr;
+        }
+    }
+}
+
 static Region DetermineRegion(char ch, Region? current, Region above, Region left, Dictionary<Position, Region> regions, HashSet<Region> result)
 {
     if (ch != above.ch)
@@ -80,7 +112,7 @@ static Dictionary<Position, Region> CreateEmptyDict(Arena arena)
 {
     Dictionary<Position, Region> result = [];
     var dummyRegion = new Region('\u8080');
-    for (int y = 0; y < arena.Height; ++y)
+    for (int y = -1; y <= arena.Height; ++y)
     {
         result.Add(new(-1, y), dummyRegion);
         result.Add(new(arena.Width, y), dummyRegion);
@@ -101,6 +133,7 @@ class Region
     public readonly char ch;
     public long area;
     public long perimeter;
+    public int corners;
 
     public Region(char c)
     {
@@ -129,7 +162,8 @@ class Region
         return rep2;
     }
 
-    public long Price => perimeter * area;
+    public long PerimeterPrice => perimeter * area;
+    public long SidePrice => corners * area;
 }
 
 record struct Position(int X, int Y);
