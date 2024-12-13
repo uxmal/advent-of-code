@@ -2,9 +2,19 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-var subProblems = ReadSubproblems(args[0]);
+// Part 1
+// {
+// var subProblems = ReadSubproblems(args[0], 0.0);
+// var tokens = SpendTokens(subProblems);
+// Console.WriteLine($"Total tokens: {tokens}");
+// }
+
+// Part 2
+{
+var subProblems = ReadSubproblems(args[0], 10000000000000.0);
 var tokens = SpendTokens(subProblems);
 Console.WriteLine($"Total tokens: {tokens}");
+}
 
 double SpendTokens(List<Subproblem> subProblems)
 {
@@ -27,7 +37,7 @@ double SpendTokens(List<Subproblem> subProblems)
 
 
 
-static List<Subproblem> ReadSubproblems(string filename)
+static List<Subproblem> ReadSubproblems(string filename, double prizePosAdjustment)
 {
     var result = new List<Subproblem>();
     var reA = new Regex(@"Button A: X\+(\d+), Y\+(\d+)");
@@ -58,8 +68,8 @@ static List<Subproblem> ReadSubproblems(string filename)
             double.Parse(mB.Groups[1].ValueSpan),
             double.Parse(mB.Groups[2].ValueSpan));
         var posPrize = new Position(
-            double.Parse(mPrize.Groups[1].ValueSpan),
-            double.Parse(mPrize.Groups[2].ValueSpan));
+            double.Parse(mPrize.Groups[1].ValueSpan) + prizePosAdjustment,
+            double.Parse(mPrize.Groups[2].ValueSpan) + prizePosAdjustment);
         var s = new Subproblem(vecA, vecB, posPrize);
         result.Add(s);
 
@@ -91,7 +101,7 @@ record Subproblem(Vector A, Vector B, Position Prize)
         };
         var solnX = inv[0,0] * Prize.X + inv[0,1] * Prize.Y;
         var solnY = inv[1,0] * Prize.X + inv[1,1] * Prize.Y;
-        return new Vector(Math.Round(solnX,5), Math.Round(solnY, 5));
+        return new Vector(Math.Round(solnX,3), Math.Round(solnY, 3));
     }
 
     public bool IsIntegerSolution(Vector v)
