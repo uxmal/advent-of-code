@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 
@@ -13,13 +14,26 @@ var state = new ProblemState
     Height = height,
     Robots = robots,
 };
-for (int i = 0; i < 100; ++i)
+int frameCount = 0;
+var sw = Stopwatch.StartNew();
+for (;;)
 {
     state.Advance();
+    ++frameCount;
+    if (frameCount % 1000 == 0)
+        Console.Write($"{frameCount} ({frameCount / sw.Elapsed.TotalSeconds:0.###} / s) \r");
+    if (state.HasAdjacentPixels(5))
+    {
+        RenderCompact(state);
+        Console.WriteLine($"Frame count: {frameCount}");
+        var line = Console.ReadLine();
+        if (line is null || line == "q")
+            break;
+    }
 }
-Render(state);
 var safetyFactor = state.SafetyFactor();
 Console.WriteLine($"Safety factor: {safetyFactor}.");
+Console.WriteLine($"Frame count: {frameCount}");
 
 
 List<Robot> LoadRobots(string filename)
@@ -44,6 +58,7 @@ Robot ParseRobot(string sRobot)
 
 static void RenderCompact(ProblemState state)
 {
+    Console.Clear();
     var places = state.Robots.Select(r => r.Position).ToHashSet();
     for (int y = 0; y < state.Height; y += 2)
     {
@@ -133,6 +148,38 @@ public class ProblemState
             }
         }
         return score;
+    }
+
+    static bool IsAdjacent(Position a, Position b)
+    {
+        return a.Y == b.Y && a.X + 1 == b.X;
+    }
+
+    internal bool HasAdjacentPixels(int cMinInRun)
+    {
+        var sorted = Robots
+            .Select(r => r.Position)
+            .OrderBy(p => p.Y)
+            .ThenBy(p => p.X)
+            .ToList();
+        int maxAdjacentPixels = 0;
+        int currentRun = 0;
+        Position? prevPos = null;
+        foreach (var pos in sorted)
+        {
+            if (prevPos is null || !IsAdjacent(prevPos.Value, pos))
+            {
+                prevPos = pos;
+                currentRun = 0;
+            }
+            else 
+            {
+                ++currentRun;
+                prevPos = pos;
+                maxAdjacentPixels = Math.Max(maxAdjacentPixels, currentRun);
+            }
+        }
+        return maxAdjacentPixels > cMinInRun;
     }
 }
 
