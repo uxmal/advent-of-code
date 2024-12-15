@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 
 int iArg = 0;
 bool interactive = false;
@@ -26,7 +27,8 @@ static ProblemState LoadProblemState(string filename)
 {
     int y = 0;
     HashSet<Position> obstacles = [];
-    HashSet<Position> boulders = [];
+    HashSet<Position> boxesLeft = [];
+    HashSet<Position> boxesRight = [];
     Position? robot = null;
 
     using var rdr = File.OpenText(filename);
@@ -54,13 +56,15 @@ static ProblemState LoadProblemState(string filename)
             switch (ch)
             {
                 case '#':
-                    obstacles.Add(new(x, y));
+                    obstacles.Add(new(x*2, y));
+                    obstacles.Add(new(x*2+1, y));
                     break;
                 case 'O':
-                    boulders.Add(new(x, y));
+                    boxesLeft.Add(new(x*2, y));
+                    boxesRight.Add(new(x*2+1, y));
                     break;
                 case '@':
-                    robot = new(x, y);
+                    robot = new(x*2, y);
                     break;
             }
             ++x;
@@ -81,7 +85,7 @@ static ProblemState LoadProblemState(string filename)
             movements.Add((char)c);
         }
     }
-    return new ProblemState(width, height, robot.Value, boulders, obstacles, movements);
+    return new ProblemState(width*2, height, robot.Value, boxesLeft, boxesRight, obstacles, movements);
 }
 
 public class ProblemState
@@ -89,7 +93,8 @@ public class ProblemState
     public int Width { get; }
     public int Height { get; }
     public Position Robot { get; set; }
-    public HashSet<Position> Boulders { get; set; }
+    public HashSet<Position> BoxesLeft { get; set; }
+    public HashSet<Position> BoxesRight { get; set; }
     public HashSet<Position> Obstacles { get; set; }
 
     public List<char> Movements { get; set; }
@@ -98,14 +103,16 @@ public class ProblemState
         int width,
         int height,
         Position value,
-        HashSet<Position> boulders,
+        HashSet<Position> boxesLeft,
+        HashSet<Position> boxesRight,
         HashSet<Position> obstacles,
         List<char> movements)
     {
         this.Width = width;
         this.Height = height;
         this.Robot = value;
-        this.Boulders = boulders;
+        this.BoxesLeft = boxesLeft;
+        this.BoxesRight = boxesRight;
         this.Obstacles = obstacles;
         this.Movements = movements;
     }
@@ -122,9 +129,13 @@ public class ProblemState
                 {
                     Console.Write('@');
                 }
-                else if (this.Boulders.Contains(pos))
+                else if (this.BoxesLeft.Contains(pos))
                 {
-                    Console.Write('O');
+                    Console.Write('[');
+                }
+                else if (this.BoxesRight.Contains(pos))
+                {
+                    Console.Write(']');
                 }
                 else if (this.Obstacles.Contains(pos))
                 {
@@ -142,64 +153,156 @@ public class ProblemState
 
     public void Advance(char m)
     {
-        var movement = m switch
+        switch (m)
         {
-            '^' => Vector.N,
-            '>' => Vector.E,
-            'v' => Vector.S,
-            '<' => Vector.W,
-            _ => throw new InvalidDataException()
+            case '>': AdvanceHorizonal(Vector.E); break;
+            case '<': AdvanceHorizonal(Vector.W); break;
+            case '^': AdvanceVertical(Vector.N); break;
+            case 'v': AdvanceVertical(Vector.S); break;
         };
+    }
 
+    private void AdvanceVertical(in Vector movement)
+    {
+        var newPos = this.Robot + movement;
+        Position boxLeft;
+        Position boxRight;
+        if (Obstacles.Contains(newPos))
+            return;
+        if (BoxesLeft.Contains(newPos))
+        {
+            boxLeft = newPos;
+            boxRight = new Position(newPos.X+1, newPos.Y);
+            Debug.Assert(BoxesRight.Contains(boxRight));
+        }
+        else if (BoxesRight.Contains(newPos))
+        {
+            boxRight = newPos;
+            boxLeft  = new Position(newPos.X-1, newPos.Y);
+            Debug.Assert(BoxesLeft.Contains(boxLeft));
+        }
+        else 
+        {
+            this.Robot = newPos;
+            return;
+        }
+            var (leftBoxes, rightBoxes) = FindMoveableVerticalBoulders(boxLeft, boxRight, movement);
+            if (leftBoxes.Count == 0)
+                return;
+            MoveBoulders(leftBoxes, rightBoxes, movement);
+            this.Robot = newPos;
+    }
+
+    private (HashSet<Position>, HashSet<Position>) FindMoveableVerticalBoulders(Position boxLeft, Position boxRight, Vector movement)
+    {
+        var leftBoxes = new HashSet<Position> { boxLeft };
+        var rightBoxes = new HashSet<Position> { boxRight };
+
+        var front = new HashSet<Position> { boxLeft, boxRight };
+        var newFront = new HashSet<Position>(); 
+
+        for (; ;)
+        {
+            foreach (var box in front)
+            {
+                if (BoxesLeft.Contains(box))
+                {
+                    var rbox = new Position(box.X+1, box.Y);
+                    Debug.Assert(BoxesRight.Contains(rbox));
+                    leftBoxes.Add(box);
+                    rightBoxes.Add(rbox);
+                    newFront.Add(box+movement);
+                    newFront.Add(rbox+movement);
+                }
+                if (BoxesRight.Contains(box))
+                {
+                    var lbox = new Position(box.X-1, box.Y);
+                    leftBoxes.Add(lbox);
+                    rightBoxes.Add(box);
+                    newFront.Add(lbox+movement);
+                    newFront.Add(box+movement);
+                }
+                if (Obstacles.Contains(box))
+                {
+                    leftBoxes.Clear();
+                    rightBoxes.Clear();
+                    return (leftBoxes, rightBoxes);
+                }
+            }
+            if (newFront.Count == 0)
+                return (leftBoxes, rightBoxes);
+            (front, newFront) = (newFront, front);
+            newFront.Clear();
+        }
+    }
+
+    private void AdvanceHorizonal(in Vector movement)
+    {
         var newPos = this.Robot + movement;
         if (Obstacles.Contains(newPos))
             return;
-        if (Boulders.Contains(newPos))
+        if (BoxesLeft.Contains(newPos) || BoxesRight.Contains(newPos))
         {
-            var moveableBoulders = FindMoveableBoulders(newPos, movement);
-            if (moveableBoulders.Count == 0)
+            var (leftBoxes, rightBoxes) = FindMoveableHorizontalBoulders(newPos, movement);
+            if (leftBoxes.Count == 0)
                 return;
-            MoveBoulders(moveableBoulders, movement);
+            MoveBoulders(leftBoxes, rightBoxes, movement);
         }
         this.Robot = newPos;
     }
 
-    private void MoveBoulders(List<Position> moveableBoulders, Vector movement)
+    private void MoveBoulders(ICollection<Position> leftBoxes, ICollection<Position> rightBoxes, Vector movement)
     {
-        foreach (var boulder in moveableBoulders)
+        foreach (var box in leftBoxes)
         {
-            Boulders.Remove(boulder);
+            BoxesLeft.Remove(box);
         }
-        foreach (var boulder in moveableBoulders)
+        foreach (var box in rightBoxes)
         {
-            var newPos = boulder + movement;
-            Boulders.Add(newPos);
+            BoxesRight.Remove(box);
+        }
+        foreach (var box in leftBoxes)
+        {
+            var newPos = box + movement;
+            BoxesLeft.Add(newPos);
+        }
+        foreach (var box in rightBoxes)
+        {
+            var newPos = box + movement;
+            BoxesRight.Add(newPos);
         }
     }
 
-    private List<Position> FindMoveableBoulders(Position pos, Vector movement)
+    private (List<Position>,List<Position>) FindMoveableHorizontalBoulders(Position pos, Vector movement)
     {
-        var result = new List<Position>();
+        var leftBoxes = new List<Position>();
+        var rightBoxes = new List<Position>();
         for (; ; pos += movement)
         {
-            if (Boulders.Contains(pos))
+            if (BoxesLeft.Contains(pos))
             {
-                result.Add(pos);
+                leftBoxes.Add(pos);
+                continue;
+            }
+            if (BoxesRight.Contains(pos))
+            {
+                rightBoxes.Add(pos);
                 continue;
             }
             if (Obstacles.Contains(pos))
             {
-                result.Clear();
-                return result;
+                leftBoxes.Clear();
+                rightBoxes.Clear();
+                return (leftBoxes, rightBoxes);
             }
             // Empty gap!
-            return result;
+            return (leftBoxes, rightBoxes);
         }
     }
 
     public int ComputeGpsScore()
     {
-        return Boulders.Sum(b => b.Y*100 + b.X);
+        return BoxesLeft.Sum(b => b.Y*100 + b.X);
     }
 }
 
