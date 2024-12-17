@@ -1,35 +1,47 @@
 ﻿using System.Diagnostics;
 using System.Text;
 
+bool interactive = false;
 var problemState = LoadProblemState(args[0]);
 var cheapestScore = FindCheapestScore();
 
 int FindCheapestScore()
 {
     Stack<Probe> stack = [];
-    stack.Push(new(problemState.Start, problemState.Direction, 0, 0, 0));
-    Dictionary<Position, int> scores = [];
+    stack.Push(new(problemState.Start, problemState.Direction, 0, null));
+    Dictionary<(Position, Vector), int> scores = [];
     var score = Dfs(stack, scores);
     return score;
 }
 
-int Dfs(Stack<Probe> stack, Dictionary<Position, int> scores)
+int Dfs(Stack<Probe> stack, Dictionary<(Position, Vector), int> scores)
 {
-    int bestScore = int.MaxValue;
+    List<Probe> bestProbes = [];
+    HashSet<Position> visited = [];
     while (stack.TryPop(out var probe))
     {
-        Render(probe, stack, scores, bestScore);
+        Render(probe, stack, scores, 0);
         if (probe.Position == problemState.End)
         {
-            bestScore = Math.Min(bestScore, probe.Score);
+            if (bestProbes.Count == 0)
+                bestProbes.Add(probe);
+            else if (probe.Score < bestProbes[0].Score)
+            {
+                bestProbes.Clear();
+                bestProbes.Add(probe);
+            }
+            else if (probe.Score == bestProbes[0].Score)
+            {
+                bestProbes.Add(probe);
+            }
             continue;
         }
-        if (scores.TryGetValue(probe.Position, out var previousScore))
+        if (scores.TryGetValue((probe.Position, probe.Direction), out var previousScore))
         {
             if (previousScore < probe.Score)
                 continue;
         }
-        scores[probe.Position] = probe.Score;
+        scores[(probe.Position, probe.Direction)] = probe.Score;
 
         var advance = probe.Position + probe.Direction;
         var l = probe.Direction.RotateLeft();
@@ -38,40 +50,50 @@ int Dfs(Stack<Probe> stack, Dictionary<Position, int> scores)
         var advanceR = probe.Position + r;
         if (!problemState.Walls.Contains(advanceL))
         {
-            stack.Push(new(advanceL, l, probe.Score + 1001, probe.Turns + 1, probe.Advances + 1));
+            stack.Push(new(advanceL, l, probe.Score + 1001, probe));
         }
         if (!problemState.Walls.Contains(advanceR))
         {
-            stack.Push(new(advanceR, r, probe.Score + 1001, probe.Turns + 1, probe.Advances + 1));
+            stack.Push(new(advanceR, r, probe.Score + 1001, probe));
         }
         if (!problemState.Walls.Contains(advance))
         {
-            stack.Push(new(advance, probe.Direction, probe.Score + 1, probe.Turns, probe.Advances + 1));
+            stack.Push(new(advance, probe.Direction, probe.Score + 1, probe));
         }
     }
-    return bestScore;
+    return ComputeScore(bestProbes);
+}
+
+int ComputeScore(List<Probe> bestProbes)
+{
+    HashSet<Position> positions = [];
+    foreach (var probe in bestProbes)
+    {
+        Probe? p = probe;
+        while (p is not null)
+        {
+            positions.Add(p.Position);
+            p = p.Previous; 
+        }
+    }
+    RenderPositions(positions);
+    return positions.Count;
 }
 
 Console.WriteLine($"Cheapest score: {cheapestScore}");
 
-void Render(Probe tos, Stack<Probe> stack, Dictionary<Position, int> scores, int bestScore)
+void RenderPositions(HashSet<Position> positions)
 {
-    return ;
     var sb = new StringBuilder();
-    var stackPos = stack.Select(p => p.Position).ToHashSet();
     for (int y = 0; y < problemState.Height; ++y)
     {
         sb.Clear();
         for (int x = 0; x < problemState.Width; ++x)
         {
             var pos = new Position(x, y);
-            if (pos == tos.Position)
+            if (positions.Contains(pos))
             {
-                sb.Append(tos.Direction.Render());
-            }
-            else if (scores.ContainsKey(pos) && stackPos.Contains(pos))
-            {
-                sb.Append('*');
+                sb.Append('O');
             }
             else if (problemState.Walls.Contains(pos))
             {
@@ -84,8 +106,39 @@ void Render(Probe tos, Stack<Probe> stack, Dictionary<Position, int> scores, int
         }
         Console.WriteLine(sb);
     }
-    Console.WriteLine($"Turns: {tos.Turns}, advances: {tos.Advances}, best {bestScore}   ");
+}
 
+void Render(Probe tos, Stack<Probe> stack, Dictionary<(Position, Vector), int> scores, int bestScore)
+{
+    return;
+    if (tos.Position.X == 5 && tos.Position.Y == 13)
+        interactive = true;
+    if (!interactive)
+        return;
+    var sb = new StringBuilder();
+    var stackPos = stack.Select(p => p.Position).ToHashSet();
+    for (int y = 0; y < problemState.Height; ++y)
+    {
+        sb.Clear();
+        for (int x = 0; x < problemState.Width; ++x)
+        {
+            var pos = new Position(x, y);
+            if (pos == tos.Position)
+            {
+                sb.Append(tos.Direction.Render());
+            }
+            else if (problemState.Walls.Contains(pos))
+            {
+                sb.Append('#');
+            }
+            else
+            {
+                sb.Append('.');
+            }
+        }
+        Console.WriteLine(sb);
+    }
+    Console.WriteLine($"({tos.Position.X},{tos.Position.Y}), cost {tos.Score}");
     Console.ReadLine();
 }
 
@@ -184,4 +237,10 @@ public record struct Vector(int X, int Y)
 
 }
 
-public record Probe(Position Position, Vector Direction, int Score, int Turns, int Advances);
+public record Probe(Position Position, Vector Direction, int Score, Probe? Previous)
+{
+    internal bool IsVisited(Position position)
+    {
+        return true;
+    }
+}
