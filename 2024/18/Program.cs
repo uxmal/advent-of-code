@@ -4,20 +4,37 @@ using System.Text.RegularExpressions;
 
 var width = Convert.ToInt32(args[0]);
 var height = Convert.ToInt32(args[1]);
-var fallen = Convert.ToInt32(args[2]);
-var arena = LoadData(width, height, fallen, args[3]);
+var iMin = Convert.ToInt32(args[2]);
+var data = LoadData(width, height, args[3]);
 
-var start = new Position(0, 0);
-var end = new Position(width - 1, height - 1);
-var path = BFS(start, end);
 
-Console.WriteLine("Steps: {0}", path?.Count.ToString() ?? "unreachable");
-if (path is not null)
+int iMax = data.Count; 
+while (iMin <= iMax)
 {
-    Render(end, path);
+    var iMid = iMin + (iMax - iMin) / 2;
+    if (RunProblem(width, height, data, iMid) is null)
+    {
+        iMax = iMid - 1;
+    }
+    else 
+    {
+        iMin = iMid + 1;
+    }
+}
+var p = data[iMax];
+Console.WriteLine($"{p.X},{p.Y}");
+
+
+List<Position>? RunProblem(int width, int height, List<Position> data, int cutoff)
+{
+    var arena = new Arena(width, height, data.Take(cutoff).ToHashSet());
+    var start = new Position(0, 0);
+    var end = new Position(width - 1, height - 1);
+    var path= BFS(arena, start, end);
+    return path;
 }
 
-void Render(Position current, List<Position> path)
+void Render(Arena arena, Position current, List<Position> path)
 {
     var onpath = path.ToHashSet();
     var sb = new StringBuilder();
@@ -42,7 +59,7 @@ void Render(Position current, List<Position> path)
     }
 }
 
-void RenderBfs(Position current, Dictionary<Position, Position> camefrom)
+void RenderBfs(Arena arena, Position current, Dictionary<Position, Position> camefrom)
 {
     var sb = new StringBuilder();
     for (int y = 0; y < arena.Height; ++y)
@@ -66,10 +83,10 @@ void RenderBfs(Position current, Dictionary<Position, Position> camefrom)
     }
 }
 
-Arena LoadData(int width, int height, int fallen, string filename)
+List<Position> LoadData(int width, int height, string filename)
 {
     var reCoords = new Regex(@"(\d+),(\d+)");
-    var obstacles = new HashSet<Position>();
+    var data = new List<Position>();
     foreach (var line in File.ReadLines(filename))
     {
         var m = reCoords.Match(line);
@@ -77,14 +94,12 @@ Arena LoadData(int width, int height, int fallen, string filename)
             throw new InvalidDataException();
         var x = int.Parse(m.Groups[1].ValueSpan);
         var y = int.Parse(m.Groups[2].ValueSpan);
-        obstacles.Add(new(x, y));
-        if (obstacles.Count == fallen)
-            break;
+        data.Add(new(x, y));
     }
-    return new Arena(width, height, obstacles);
+    return data;
 }
 
-List<Position>? BFS(Position start, Position goal)
+List<Position>? BFS(Arena arena, Position start, Position goal)
 {
     Queue<Position> probes = new Queue<Position>();
     probes.Enqueue(start);
